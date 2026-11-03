@@ -1,0 +1,338 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local map = Workspace:WaitForChild("Map")
+local ground = map:WaitForChild("Ground")
+
+local selectedPart = nil
+local originalPositions = {}
+local selectionEnabled = true
+local currentLift = 0
+local maxLift = 30
+local lastLiftTick = 0
+local HIGHLIGHT_LINGER = 3
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MirrozzScript"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 250)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -125)
+mainFrame.BackgroundColor3 = Color3.fromRGB(24, 26, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 10)
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = Color3.fromRGB(60, 66, 78)
+mainStroke.Thickness = 1
+
+local uiScale = Instance.new("UIScale")
+uiScale.Parent = mainFrame
+uiScale.Scale = UserInputService.TouchEnabled and 1.4 or 1
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 52)
+titleBar.BackgroundColor3 = Color3.fromRGB(36, 40, 48)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+local titleCorner = Instance.new("UICorner", titleBar)
+titleCorner.CornerRadius = UDim.new(0, 10)
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -80, 0, 24)
+titleLabel.Position = UDim2.new(0, 14, 0, 6)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Mirrozz script"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 17
+titleLabel.Parent = titleBar
+
+local subtitleLabel = Instance.new("TextLabel")
+subtitleLabel.Size = UDim2.new(1, -80, 0, 16)
+subtitleLabel.Position = UDim2.new(0, 14, 0, 29)
+subtitleLabel.BackgroundTransparency = 1
+subtitleLabel.Text = "воздушная база"
+subtitleLabel.TextColor3 = Color3.fromRGB(140, 148, 162)
+subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+subtitleLabel.Font = Enum.Font.Gotham
+subtitleLabel.TextSize = 12
+subtitleLabel.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 28, 0, 28)
+closeButton.Position = UDim2.new(1, -36, 0, 12)
+closeButton.BackgroundColor3 = Color3.fromRGB(60, 40, 44)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "✕"
+closeButton.TextColor3 = Color3.fromRGB(255, 180, 180)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 14
+closeButton.Parent = titleBar
+local closeCorner = Instance.new("UICorner", closeButton)
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+local dragging, dragStart, startPos = false, nil, nil
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+local statusCard = Instance.new("Frame")
+statusCard.Size = UDim2.new(1, -24, 0, 32)
+statusCard.Position = UDim2.new(0, 12, 0, 64)
+statusCard.BackgroundColor3 = Color3.fromRGB(32, 36, 42)
+statusCard.BorderSizePixel = 0
+statusCard.Parent = mainFrame
+local statusCorner = Instance.new("UICorner", statusCard)
+statusCorner.CornerRadius = UDim.new(0, 6)
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -16, 1, 0)
+statusLabel.Position = UDim2.new(0, 10, 0, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Выбран: нет"
+statusLabel.TextColor3 = Color3.fromRGB(210, 218, 230)
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Font = Enum.Font.GothamMedium
+statusLabel.TextSize = 13
+statusLabel.Parent = statusCard
+
+local sliderFrame = Instance.new("Frame")
+sliderFrame.Size = UDim2.new(1, -100, 0, 22)
+sliderFrame.Position = UDim2.new(0, 12, 0, 108)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(50, 56, 66)
+sliderFrame.BorderSizePixel = 0
+sliderFrame.Parent = mainFrame
+local sliderCorner = Instance.new("UICorner", sliderFrame)
+sliderCorner.CornerRadius = UDim.new(0, 11)
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Size = UDim2.new(0, 0, 1, 0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(70, 180, 255)
+sliderFill.BorderSizePixel = 0
+sliderFill.Parent = sliderFrame
+local fillCorner = Instance.new("UICorner", sliderFill)
+fillCorner.CornerRadius = UDim.new(0, 11)
+
+local sliderKnob = Instance.new("Frame")
+sliderKnob.Size = UDim2.new(0, 22, 0, 22)
+sliderKnob.Position = UDim2.new(0, -11, 0, 0)
+sliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+sliderKnob.BorderSizePixel = 0
+sliderKnob.Parent = sliderFrame
+local knobCorner = Instance.new("UICorner", sliderKnob)
+knobCorner.CornerRadius = UDim.new(0.5, 0)
+
+local valueLabel = Instance.new("TextLabel")
+valueLabel.Size = UDim2.new(0, 70, 0, 22)
+valueLabel.Position = UDim2.new(1, -82, 0, 108)
+valueLabel.BackgroundTransparency = 1
+valueLabel.Text = "0.0 st"
+valueLabel.TextColor3 = Color3.fromRGB(210, 218, 230)
+valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+valueLabel.Font = Enum.Font.GothamMedium
+valueLabel.TextSize = 13
+valueLabel.Parent = mainFrame
+
+local resetButton = Instance.new("TextButton")
+resetButton.Size = UDim2.new(0, 120, 0, 34)
+resetButton.Position = UDim2.new(0, 12, 0, 144)
+resetButton.BackgroundColor3 = Color3.fromRGB(56, 62, 74)
+resetButton.BorderSizePixel = 0
+resetButton.Text = "Сброс"
+resetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+resetButton.Font = Enum.Font.GothamMedium
+resetButton.TextSize = 13
+resetButton.Parent = mainFrame
+local resetCorner = Instance.new("UICorner", resetButton)
+resetCorner.CornerRadius = UDim.new(0, 6)
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(1, -144, 0, 34)
+toggleButton.Position = UDim2.new(0, 132, 0, 144)
+toggleButton.BackgroundColor3 = Color3.fromRGB(40, 70, 55)
+toggleButton.BorderSizePixel = 0
+toggleButton.Text = "Выбор: ВКЛ"
+toggleButton.TextColor3 = Color3.fromRGB(120, 255, 170)
+toggleButton.Font = Enum.Font.GothamMedium
+toggleButton.TextSize = 13
+toggleButton.Parent = mainFrame
+local toggleCorner = Instance.new("UICorner", toggleButton)
+toggleCorner.CornerRadius = UDim.new(0, 6)
+
+local hintLabel = Instance.new("TextLabel")
+hintLabel.Size = UDim2.new(1, -24, 0, 44)
+hintLabel.Position = UDim2.new(0, 12, 0, 190)
+hintLabel.BackgroundTransparency = 1
+hintLabel.Text = "Кликни по любому Grass. Подсветка держится 3 сек после подъёма, если выбор выключен."
+hintLabel.TextColor3 = Color3.fromRGB(130, 138, 152)
+hintLabel.TextXAlignment = Enum.TextXAlignment.Left
+hintLabel.TextYAlignment = Enum.TextYAlignment.Top
+hintLabel.Font = Enum.Font.Gotham
+hintLabel.TextSize = 11
+hintLabel.TextWrapped = true
+hintLabel.Parent = mainFrame
+
+local highlight = Instance.new("Highlight")
+highlight.FillColor = Color3.fromRGB(70, 180, 255)
+highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+highlight.FillTransparency = 0.5
+highlight.OutlineTransparency = 0
+highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+highlight.Adornee = nil
+highlight.Parent = screenGui
+
+local function getViewportPoint(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        return input.Position
+    end
+    return UserInputService:GetMouseLocation()
+end
+
+local function isValidTarget(part)
+    if not part or not part:IsA("BasePart") then return false end
+    if part.Name ~= "Grass" then return false end
+    return part == ground or part:IsDescendantOf(ground)
+end
+
+local function updateHighlight()
+    if not selectedPart then
+        highlight.Adornee = nil
+        return
+    end
+    if selectionEnabled then
+        highlight.Adornee = selectedPart
+    else
+        local sinceLift = tick() - lastLiftTick
+        if sinceLift <= HIGHLIGHT_LINGER then
+            highlight.Adornee = selectedPart
+        else
+            highlight.Adornee = nil
+        end
+    end
+end
+
+local function updateSlider(value)
+    currentLift = math.clamp(value, 0, maxLift)
+    local percent = currentLift / maxLift
+    sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+    sliderKnob.Position = UDim2.new(percent, -11, 0, 0)
+    valueLabel.Text = string.format("%.1f st", currentLift)
+    if selectedPart and originalPositions[selectedPart] then
+        selectedPart.Position = originalPositions[selectedPart] + Vector3.new(0, currentLift, 0)
+        statusLabel.Text = string.format("Выбран: %s (+%.1f)", selectedPart.Name, currentLift)
+        if currentLift > 0 then
+            lastLiftTick = tick()
+        end
+    end
+end
+
+local function selectPart(part)
+    if not isValidTarget(part) then
+        if part and part:IsA("BasePart") then
+            hintLabel.Text = "Это не Grass"
+        end
+        return
+    end
+    if selectedPart == part then return end
+    selectedPart = part
+    if not originalPositions[part] then
+        originalPositions[part] = part.Position
+        if not part.Anchored then
+            part.Anchored = true
+        end
+    end
+    hintLabel.Text = "Grass выбран — тяни слайдер вверх"
+    updateSlider(0)
+    lastLiftTick = tick()
+end
+
+local sliderDragging = false
+local function updateSliderFromInput(input)
+    local vp = getViewportPoint(input)
+    local framePos = sliderFrame.AbsolutePosition.X
+    local frameWidth = sliderFrame.AbsoluteSize.X
+    local percent = math.clamp((vp.X - framePos) / frameWidth, 0, 1)
+    updateSlider(percent * maxLift)
+end
+
+sliderFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        sliderDragging = true
+        updateSliderFromInput(input)
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        updateSliderFromInput(input)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        sliderDragging = false
+    end
+end)
+
+resetButton.MouseButton1Click:Connect(function()
+    if selectedPart and originalPositions[selectedPart] then
+        selectedPart.Position = originalPositions[selectedPart]
+        updateSlider(0)
+        statusLabel.Text = "Выбран: " .. selectedPart.Name .. " (сброшен)"
+    end
+end)
+
+toggleButton.MouseButton1Click:Connect(function()
+    selectionEnabled = not selectionEnabled
+    toggleButton.Text = selectionEnabled and "Выбор: ВКЛ" or "Выбор: ВЫКЛ"
+    toggleButton.TextColor3 = selectionEnabled and Color3.fromRGB(120, 255, 170) or Color3.fromRGB(255, 140, 140)
+    toggleButton.BackgroundColor3 = selectionEnabled and Color3.fromRGB(40, 70, 55) or Color3.fromRGB(70, 40, 44)
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed or not selectionEnabled or sliderDragging then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        local camera = Workspace.CurrentCamera
+        if not camera then return end
+        local vp = getViewportPoint(input)
+        local ray = camera:ViewportPointToRay(vp.X, vp.Y)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {player.Character}
+        local result = Workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+        if result and result.Instance then
+            selectPart(result.Instance)
+        end
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    updateHighlight()
+end)
