@@ -1,0 +1,618 @@
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS        = game:GetService("UserInputService")
+
+local lp   = Players.LocalPlayer
+local pg   = lp:WaitForChild("PlayerGui")
+local char = lp.Character or lp.CharacterAdded:Wait()
+local hrp  = char:WaitForChild("HumanoidRootPart")
+local hum  = char:WaitForChild("Humanoid")
+
+local LYING_ANGLE = CFrame.Angles(math.rad(90), 0, 0)
+
+local CFG = {
+    SpeedUnder    = 45,
+    SpeedUp       = 35,
+    UnderOffset   = 3.5,
+    WaitTimeout   = 2.0,
+    MaxRetries    = 3,
+    AntiFlingTick = 0.1,
+}
+
+local running      = false
+local antiFlingOn  = false
+local antiFlingConn = nil
+local mainThread   = nil
+
+local gui = Instance.new("ScreenGui")
+gui.Name           = "MIrrozzGui"
+gui.ResetOnSpawn   = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent         = pg
+
+local W, H = 290, 250
+
+local glow = Instance.new("Frame")
+glow.AnchorPoint            = Vector2.new(0.5, 0.5)
+glow.Position               = UDim2.new(0.5, 0, 0.5, 0)
+glow.Size                   = UDim2.new(0, W + 16, 0, H + 16)
+glow.BackgroundColor3       = Color3.fromRGB(0, 255, 150)
+glow.BackgroundTransparency = 0.82
+glow.BorderSizePixel        = 0
+glow.ZIndex                 = 1
+glow.Parent                 = gui
+local glowCorner = Instance.new("UICorner")
+glowCorner.CornerRadius = UDim.new(0, 22)
+glowCorner.Parent       = glow
+
+local shadow = Instance.new("Frame")
+shadow.AnchorPoint            = Vector2.new(0.5, 0.5)
+shadow.Position               = UDim2.new(0.5, 6, 0.5, 10)
+shadow.Size                   = UDim2.new(0, W, 0, H)
+shadow.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
+shadow.BackgroundTransparency = 0.55
+shadow.BorderSizePixel        = 0
+shadow.ZIndex                 = 2
+shadow.Parent                 = gui
+local shadowCorner = Instance.new("UICorner")
+shadowCorner.CornerRadius = UDim.new(0, 18)
+shadowCorner.Parent       = shadow
+
+local frame = Instance.new("Frame")
+frame.AnchorPoint          = Vector2.new(0.5, 0.5)
+frame.Position             = UDim2.new(0.5, 0, 0.5, 0)
+frame.Size                 = UDim2.new(0, W, 0, H)
+frame.BackgroundColor3     = Color3.fromRGB(24, 20, 40)
+frame.BorderSizePixel      = 0
+frame.ClipsDescendants     = true
+frame.Active               = true
+frame.ZIndex               = 3
+frame.Parent               = gui
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 18)
+frameCorner.Parent       = frame
+
+local frameGradient = Instance.new("UIGradient")
+frameGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(46, 30, 72)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(28, 22, 48)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 16, 32)),
+}
+frameGradient.Rotation = 115
+frameGradient.Parent   = frame
+
+local frameStroke = Instance.new("UIStroke")
+frameStroke.Color        = Color3.fromRGB(180, 100, 255)
+frameStroke.Thickness    = 1.4
+frameStroke.Transparency = 0.35
+frameStroke.Parent       = frame
+
+local shine = Instance.new("Frame")
+shine.Size                = UDim2.new(0, 130, 0, 130)
+shine.Position            = UDim2.new(0, -50, 0, -60)
+shine.BackgroundColor3    = Color3.fromRGB(255, 255, 255)
+shine.BackgroundTransparency = 0.93
+shine.BorderSizePixel     = 0
+shine.Rotation            = 25
+shine.Active              = false
+shine.ZIndex              = 4
+shine.Parent              = frame
+local shineCorner = Instance.new("UICorner")
+shineCorner.CornerRadius = UDim.new(1, 0)
+shineCorner.Parent       = shine
+
+local header = Instance.new("Frame")
+header.Size                   = UDim2.new(1, 0, 0, 56)
+header.BackgroundTransparency = 1
+header.Active                 = false
+header.ZIndex                 = 5
+header.Parent                 = frame
+
+local dot = Instance.new("Frame")
+dot.Size                = UDim2.new(0, 9, 0, 9)
+dot.Position            = UDim2.new(0, 18, 0, 18)
+dot.BackgroundColor3    = Color3.fromRGB(0, 255, 170)
+dot.BorderSizePixel     = 0
+dot.Active              = false
+dot.ZIndex              = 6
+dot.Parent              = header
+local dotCorner = Instance.new("UICorner")
+dotCorner.CornerRadius = UDim.new(1, 0)
+dotCorner.Parent       = dot
+local dotStroke = Instance.new("UIStroke")
+dotStroke.Color        = Color3.fromRGB(0, 255, 170)
+dotStroke.Thickness    = 2
+dotStroke.Transparency = 0.55
+dotStroke.Parent       = dot
+
+local title = Instance.new("TextLabel")
+title.Size                = UDim2.new(1, -80, 0, 22)
+title.Position            = UDim2.new(0, 34, 0, 12)
+title.BackgroundTransparency = 1
+title.Text                = "MIrrozz script"
+title.TextColor3          = Color3.fromRGB(245, 235, 255)
+title.Font                = Enum.Font.GothamBlack
+title.TextSize            = 17
+title.TextXAlignment      = Enum.TextXAlignment.Left
+title.Active              = false
+title.ZIndex              = 6
+title.Parent              = header
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Size                = UDim2.new(1, -80, 0, 16)
+subtitle.Position            = UDim2.new(0, 34, 0, 32)
+subtitle.BackgroundTransparency = 1
+subtitle.Text                = "mm2 farm"
+subtitle.TextColor3          = Color3.fromRGB(180, 130, 255)
+subtitle.Font                = Enum.Font.GothamMedium
+subtitle.TextSize            = 12
+subtitle.TextXAlignment      = Enum.TextXAlignment.Left
+subtitle.Active              = false
+subtitle.ZIndex              = 6
+subtitle.Parent              = header
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size              = UDim2.new(0, 28, 0, 28)
+closeBtn.Position          = UDim2.new(1, -38, 0, 14)
+closeBtn.BackgroundColor3  = Color3.fromRGB(60, 25, 45)
+closeBtn.Text              = "X"
+closeBtn.TextColor3        = Color3.fromRGB(255, 140, 180)
+closeBtn.Font              = Enum.Font.GothamBlack
+closeBtn.TextSize          = 14
+closeBtn.BorderSizePixel   = 0
+closeBtn.AutoButtonColor   = false
+closeBtn.ZIndex            = 7
+closeBtn.Parent            = header
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 9)
+closeCorner.Parent       = closeBtn
+closeBtn.MouseEnter:Connect(function()
+    closeBtn.BackgroundColor3 = Color3.fromRGB(210, 50, 90)
+    closeBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
+end)
+closeBtn.MouseLeave:Connect(function()
+    closeBtn.BackgroundColor3 = Color3.fromRGB(60, 25, 45)
+    closeBtn.TextColor3       = Color3.fromRGB(255, 140, 180)
+end)
+closeBtn.MouseButton1Click:Connect(function()
+    if running then stop() end
+    if antiFlingOn then toggleAntiFling(false) end
+    gui:Destroy()
+end)
+
+local separator = Instance.new("Frame")
+separator.Size                = UDim2.new(1, -32, 0, 1)
+separator.Position            = UDim2.new(0, 16, 0, 58)
+separator.BackgroundColor3    = Color3.fromRGB(255, 255, 255)
+separator.BackgroundTransparency = 0.86
+separator.BorderSizePixel     = 0
+separator.Active              = false
+separator.ZIndex              = 5
+separator.Parent              = frame
+
+local toggle = Instance.new("TextButton")
+toggle.Size             = UDim2.new(1, -32, 0, 52)
+toggle.Position         = UDim2.new(0, 16, 0, 70)
+toggle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+toggle.Text             = ""
+toggle.TextColor3       = Color3.fromRGB(255, 255, 255)
+toggle.Font             = Enum.Font.GothamBlack
+toggle.TextSize         = 16
+toggle.BorderSizePixel  = 0
+toggle.AutoButtonColor  = false
+toggle.ZIndex           = 5
+toggle.Parent           = frame
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 12)
+toggleCorner.Parent       = toggle
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color        = Color3.fromRGB(255, 255, 255)
+toggleStroke.Thickness    = 1.2
+toggleStroke.Transparency = 0.75
+toggleStroke.Parent       = toggle
+local toggleGradient = Instance.new("UIGradient")
+toggleGradient.Rotation = 90
+toggleGradient.Parent   = toggle
+
+local toggleGloss = Instance.new("Frame")
+toggleGloss.Size                = UDim2.new(1, -4, 0, 18)
+toggleGloss.Position            = UDim2.new(0, 2, 0, 2)
+toggleGloss.BackgroundColor3    = Color3.fromRGB(255, 255, 255)
+toggleGloss.BackgroundTransparency = 0.82
+toggleGloss.BorderSizePixel     = 0
+toggleGloss.Active              = false
+toggleGloss.ZIndex              = 6
+toggleGloss.Parent              = toggle
+local toggleGlossCorner = Instance.new("UICorner")
+toggleGlossCorner.CornerRadius = UDim.new(0, 10)
+toggleGlossCorner.Parent       = toggleGloss
+
+local toggleText = Instance.new("TextLabel")
+toggleText.Size                = UDim2.new(1, 0, 1, 0)
+toggleText.BackgroundTransparency = 1
+toggleText.Text                = "START"
+toggleText.TextColor3          = Color3.fromRGB(255, 255, 255)
+toggleText.Font                = Enum.Font.GothamBlack
+toggleText.TextSize            = 16
+toggleText.Active              = false
+toggleText.ZIndex              = 8
+toggleText.Parent              = toggle
+
+local startGrad = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 235, 155)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 200, 130)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 165, 100)),
+}
+local startHover = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 255, 195)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 225, 150)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 185, 115)),
+}
+local stopGrad = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 110, 150)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 55, 100)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(155, 30, 65)),
+}
+local stopHover = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 145, 175)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(245, 75, 125)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(190, 45, 85)),
+}
+toggleGradient.Color = startGrad
+
+local afContainer = Instance.new("Frame")
+afContainer.Size                = UDim2.new(1, -32, 0, 40)
+afContainer.Position            = UDim2.new(0, 16, 0, 130)
+afContainer.BackgroundColor3    = Color3.fromRGB(0, 0, 0)
+afContainer.BackgroundTransparency = 0.72
+afContainer.BorderSizePixel     = 0
+afContainer.ZIndex              = 5
+afContainer.Parent              = frame
+local afCorner = Instance.new("UICorner")
+afCorner.CornerRadius = UDim.new(0, 10)
+afCorner.Parent       = afContainer
+
+local afLabel = Instance.new("TextLabel")
+afLabel.Size                = UDim2.new(0.65, 0, 1, 0)
+afLabel.Position            = UDim2.new(0, 12, 0, 0)
+afLabel.BackgroundTransparency = 1
+afLabel.Text                = "anti-fling"
+afLabel.TextColor3          = Color3.fromRGB(220, 200, 255)
+afLabel.Font                = Enum.Font.GothamBold
+afLabel.TextSize            = 14
+afLabel.TextXAlignment      = Enum.TextXAlignment.Left
+afLabel.ZIndex              = 6
+afLabel.Parent              = afContainer
+
+local afSwitch = Instance.new("TextButton")
+afSwitch.Size              = UDim2.new(0, 50, 0, 26)
+afSwitch.Position          = UDim2.new(1, -62, 0.5, -13)
+afSwitch.BackgroundColor3  = Color3.fromRGB(55, 55, 70)
+afSwitch.Text              = ""
+afSwitch.BorderSizePixel   = 0
+afSwitch.AutoButtonColor   = false
+afSwitch.ZIndex            = 7
+afSwitch.Parent            = afContainer
+local afSwitchCorner = Instance.new("UICorner")
+afSwitchCorner.CornerRadius = UDim.new(1, 0)
+afSwitchCorner.Parent       = afSwitch
+
+local afKnob = Instance.new("Frame")
+afKnob.Size                = UDim2.new(0, 20, 0, 20)
+afKnob.Position            = UDim2.new(0, 3, 0.5, -10)
+afKnob.BackgroundColor3    = Color3.fromRGB(200, 200, 210)
+afKnob.BorderSizePixel     = 0
+afKnob.ZIndex              = 8
+afKnob.Parent              = afSwitch
+local afKnobCorner = Instance.new("UICorner")
+afKnobCorner.CornerRadius = UDim.new(1, 0)
+afKnobCorner.Parent       = afKnob
+
+local status = Instance.new("TextLabel")
+status.Size                = UDim2.new(1, -32, 0, 18)
+status.Position            = UDim2.new(0, 16, 0, 178)
+status.BackgroundTransparency = 1
+status.Text                = "idle"
+status.TextColor3          = Color3.fromRGB(170, 150, 200)
+status.Font                = Enum.Font.GothamMedium
+status.TextSize            = 12
+status.TextXAlignment      = Enum.TextXAlignment.Left
+status.Active              = false
+status.ZIndex              = 5
+status.Parent              = frame
+
+local footer = Instance.new("Frame")
+footer.Size                = UDim2.new(1, 0, 0, 22)
+footer.Position            = UDim2.new(0, 0, 1, -22)
+footer.BackgroundColor3    = Color3.fromRGB(0, 0, 0)
+footer.BackgroundTransparency = 0.85
+footer.BorderSizePixel     = 0
+footer.Active              = false
+footer.ZIndex              = 4
+footer.Parent              = frame
+local footerText = Instance.new("TextLabel")
+footerText.Size                = UDim2.new(1, -32, 1, 0)
+footerText.Position            = UDim2.new(0, 16, 0, 0)
+footerText.BackgroundTransparency = 1
+footerText.Text                = "mm2"
+footerText.TextColor3          = Color3.fromRGB(140, 110, 180)
+footerText.Font                = Enum.Font.GothamMedium
+footerText.TextSize            = 10
+footerText.TextXAlignment      = Enum.TextXAlignment.Left
+footerText.Active              = false
+footerText.ZIndex              = 5
+footerText.Parent              = footer
+
+local dragging, dragStart, startFramePos, startShadowPos, startGlowPos
+
+frame.InputBegan:Connect(function(input)
+    if dragging then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+       or input.UserInputType == Enum.UserInputType.Touch then
+        dragging       = true
+        dragStart      = input.Position
+        startFramePos  = frame.Position
+        startShadowPos = shadow.Position
+        startGlowPos   = glow.Position
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if not dragging then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseMovement
+       and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    local delta = input.Position - dragStart
+    frame.Position  = UDim2.new(startFramePos.X.Scale,  startFramePos.X.Offset  + delta.X, startFramePos.Y.Scale,  startFramePos.Y.Offset  + delta.Y)
+    shadow.Position = UDim2.new(startShadowPos.X.Scale, startShadowPos.X.Offset + delta.X, startShadowPos.Y.Scale, startShadowPos.Y.Offset + delta.Y)
+    glow.Position   = UDim2.new(startGlowPos.X.Scale,   startGlowPos.X.Offset   + delta.X, startGlowPos.Y.Scale,   startGlowPos.Y.Offset   + delta.Y)
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+       or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+local function disablePartCollision(part)
+    if part:IsA("BasePart") and part.CanCollide then
+        part.CanCollide = false
+    end
+end
+
+local function stripAccessories(root)
+    for _, child in ipairs(root:GetChildren()) do
+        if child:IsA("Accessory") then
+            local handle = child:FindFirstChildWhichIsA("BasePart")
+            if handle then handle:Destroy() end
+        end
+    end
+end
+
+local function killTouchTransmitters(root)
+    for _, d in ipairs(root:GetDescendants()) do
+        if d:IsA("TouchTransmitter") then d:Destroy() end
+    end
+end
+
+local function antiFlingStep()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == lp then continue end
+        local c = plr.Character
+        if not c then continue end
+
+        local hrpOther = c:FindFirstChild("HumanoidRootPart")
+        if hrpOther then
+            hrpOther.CanCollide = false
+            killTouchTransmitters(hrpOther)
+        end
+
+        for _, part in ipairs(c:GetChildren()) do
+            disablePartCollision(part)
+        end
+
+        stripAccessories(c)
+    end
+
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA("Accessory") then
+            local handle = obj:FindFirstChildWhichIsA("BasePart")
+            if handle then handle:Destroy() end
+        end
+    end
+end
+
+function toggleAntiFling(state)
+    antiFlingOn = state
+    if state then
+        afSwitch.BackgroundColor3 = Color3.fromRGB(0, 200, 130)
+        afKnob.Position            = UDim2.new(1, -23, 0.5, -10)
+        afKnob.BackgroundColor3    = Color3.fromRGB(255, 255, 255)
+
+        antiFlingStep()
+        antiFlingConn = RunService.Heartbeat:Connect(function(dt)
+            if dt < CFG.AntiFlingTick then return end
+            antiFlingStep()
+        end)
+    else
+        afSwitch.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
+        afKnob.Position            = UDim2.new(0, 3, 0.5, -10)
+        afKnob.BackgroundColor3    = Color3.fromRGB(200, 200, 210)
+
+        if antiFlingConn then
+            antiFlingConn:Disconnect()
+            antiFlingConn = nil
+        end
+    end
+end
+
+afSwitch.MouseButton1Click:Connect(function()
+    toggleAntiFling(not antiFlingOn)
+end)
+
+local function updateToggleVisual()
+    if running then
+        toggleText.Text      = "STOP"
+        toggleGradient.Color = stopGrad
+    else
+        toggleText.Text      = "START"
+        toggleGradient.Color = startGrad
+    end
+end
+
+toggle.MouseEnter:Connect(function()
+    toggleGradient.Color = running and stopHover or startHover
+end)
+toggle.MouseLeave:Connect(function()
+    updateToggleVisual()
+end)
+
+local function findCoins()
+    local coins = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "TouchInterest" and obj:IsA("TouchTransmitter") then
+            local part = obj.Parent
+            if part and part:IsA("BasePart") then
+                local ok, p = false, part
+                while p do
+                    if p.Name == "CoinContainer" then ok = true; break end
+                    p = p.Parent
+                end
+                if ok then
+                    table.insert(coins, part)
+                end
+            end
+        end
+    end
+    return coins
+end
+
+local function moveTo(targetPos, speed)
+    local start    = hrp.Position
+    local dist     = (targetPos - start).Magnitude
+    local duration = math.max(dist / speed, 0.15)
+    local t        = 0
+    while t < duration do
+        if not running then return end
+        local dt = RunService.Heartbeat:Wait()
+        t += dt
+        local alpha = math.min(t / duration, 1)
+        local pos   = start:Lerp(targetPos, alpha)
+        hrp.CFrame  = CFrame.new(pos) * LYING_ANGLE
+    end
+    hrp.CFrame = CFrame.new(targetPos) * LYING_ANGLE
+end
+
+local function waitForCollect(coin, timeout)
+    local waited = 0
+    while coin.Parent and coin:FindFirstChild("TouchInterest") and waited < timeout do
+        task.wait(0.06)
+        waited += 0.06
+    end
+    return not coin.Parent or not coin:FindFirstChild("TouchInterest")
+end
+
+local function collectLoop()
+    while running do
+        local coins = findCoins()
+        if #coins == 0 then
+            status.Text = "no coins, waiting..."
+            task.wait(0.8)
+            continue
+        end
+
+        table.sort(coins, function(a, b)
+            return (a.Position - hrp.Position).Magnitude
+                 < (b.Position - hrp.Position).Magnitude
+        end)
+
+        local coin    = coins[1]
+        local coinPos = coin.Position
+
+        status.Text = "flying under..."
+        moveTo(Vector3.new(coinPos.X, coinPos.Y - CFG.UnderOffset, coinPos.Z), CFG.SpeedUnder)
+        if not running then break end
+        task.wait(0.08)
+
+        local success = false
+        for attempt = 1, CFG.MaxRetries do
+            status.Text = ("collecting... (%d/%d)"):format(attempt, CFG.MaxRetries)
+
+            moveTo(coinPos, CFG.SpeedUp)
+            if not running then break end
+
+            if waitForCollect(coin, CFG.WaitTimeout) then
+                success = true
+                break
+            end
+
+            if attempt < CFG.MaxRetries then
+                hrp.CFrame = CFrame.new(Vector3.new(coinPos.X, coinPos.Y - CFG.UnderOffset, coinPos.Z)) * LYING_ANGLE
+                task.wait(0.15)
+            end
+        end
+
+        if not success then
+            status.Text = "coin skipped"
+        end
+
+        hrp.CFrame = CFrame.new(coinPos + Vector3.new(0, 3, 0)) * LYING_ANGLE
+        task.wait(0.35 + math.random() * 0.25)
+    end
+end
+
+local function freezeCharacter()
+    hum.PlatformStand = true
+    hum.WalkSpeed     = 0
+    hum.JumpPower     = 0
+    hum.JumpHeight    = 0
+    hrp.CanCollide    = false
+end
+
+local function unfreezeCharacter()
+    hum.PlatformStand = false
+    hum.WalkSpeed     = 16
+    hum.JumpPower     = 50
+    hum.JumpHeight    = 7.2
+    hrp.CanCollide    = true
+end
+
+local function start()
+    running = true
+    updateToggleVisual()
+    status.Text = "starting..."
+
+    freezeCharacter()
+
+    mainThread = task.spawn(function()
+        local ok, err = pcall(collectLoop)
+        if not ok then
+            status.Text = "error: " .. tostring(err)
+        end
+    end)
+end
+
+local function stop()
+    running = false
+    updateToggleVisual()
+    status.Text = "stopped"
+
+    if mainThread then
+        task.cancel(mainThread)
+        mainThread = nil
+    end
+
+    unfreezeCharacter()
+end
+
+toggle.MouseButton1Click:Connect(function()
+    if running then stop() else start() end
+end)
+
+lp.CharacterAdded:Connect(function(c)
+    char = c
+    hrp  = c:WaitForChild("HumanoidRootPart")
+    hum  = c:WaitForChild("Humanoid")
+    if running then stop() end
+end)
